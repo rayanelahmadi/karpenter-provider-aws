@@ -176,8 +176,19 @@ func (c *Controller) finalize(ctx context.Context, nodeClass *v1.EC2NodeClass) (
 		return reconcile.Result{RequeueAfter: time.Minute * 10}, nil // periodically fire the event
 	}
 	if nodeClass.Spec.Role != "" {
-		if err := c.instanceProfileProvider.Delete(ctx, nodeClass.InstanceProfileName(options.FromContext(ctx).ClusterName, c.region)); err != nil {
-			return reconcile.Result{}, fmt.Errorf("deleting instance profile, %w", err)
+		tags := map[string]string{
+			v1.EKSClusterNameTagKey: options.FromContext(ctx).ClusterName,
+			v1.NodeClassTagKey:      nodeClass.Name,
+			v1.LabelTopologyRegion:  c.region,
+		}
+		profiles, err := c.instanceProfileProvider.List(ctx, tags)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("listing instance profiles, %w", err)
+		}
+		for _, name := range profiles {
+			if err := c.instanceProfileProvider.Delete(ctx, name); err != nil {
+				return reconcile.Result{}, fmt.Errorf("deleting instance profile, %w", err)
+			}
 		}
 	}
 	if err := c.launchTemplateProvider.DeleteAll(ctx, nodeClass); err != nil {

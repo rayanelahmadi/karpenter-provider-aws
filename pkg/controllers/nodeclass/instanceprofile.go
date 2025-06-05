@@ -41,15 +41,17 @@ func NewInstanceProfileReconciler(instanceProfileProvider instanceprofile.Provid
 func (ip *InstanceProfile) Reconcile(ctx context.Context, nodeClass *v1.EC2NodeClass) (reconcile.Result, error) {
 	if nodeClass.Spec.Role != "" {
 		profileName := nodeClass.InstanceProfileName(options.FromContext(ctx).ClusterName, ip.region)
-		if err := ip.instanceProfileProvider.Create(
-			ctx,
-			profileName,
-			nodeClass.InstanceProfileRole(),
-			nodeClass.InstanceProfileTags(options.FromContext(ctx).ClusterName, ip.region),
-		); err != nil {
-			return reconcile.Result{}, fmt.Errorf("creating instance profile, %w", err)
+		if nodeClass.Status.InstanceProfile != profileName {
+			if err := ip.instanceProfileProvider.Create(
+				ctx,
+				profileName,
+				nodeClass.InstanceProfileRole(),
+				nodeClass.InstanceProfileTags(options.FromContext(ctx).ClusterName, ip.region),
+			); err != nil {
+				return reconcile.Result{}, fmt.Errorf("creating instance profile, %w", err)
+			}
+			nodeClass.Status.InstanceProfile = profileName
 		}
-		nodeClass.Status.InstanceProfile = profileName
 	} else {
 		nodeClass.Status.InstanceProfile = lo.FromPtr(nodeClass.Spec.InstanceProfile)
 	}

@@ -77,13 +77,11 @@ type EC2NodeClassSpec struct {
 	// this UserData to ensure nodes are being provisioned with the correct configuration.
 	// +optional
 	UserData *string `json:"userData,omitempty"`
-	// Role is the AWS identity that nodes use. This field is immutable.
+	// Role is the AWS identity that nodes use. This field may be updated.
 	// This field is mutually exclusive from instanceProfile.
-	// Marking this field as immutable avoids concerns around terminating managed instance profiles from running instances.
-	// This field may be made mutable in the future, assuming the correct garbage collection and drift handling is implemented
-	// for the old instance profiles on an update.
+	// Karpenter manages a distinct instance profile for each unique role to
+	// avoid disrupting running nodes when the role changes.
 	// +kubebuilder:validation:XValidation:rule="self != ''",message="role cannot be empty"
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="immutable field changed"
 	// +optional
 	Role string `json:"role,omitempty"`
 	// InstanceProfile is the AWS entity that instances use.
@@ -498,7 +496,8 @@ func (in *EC2NodeClass) Hash() string {
 }
 
 func (in *EC2NodeClass) InstanceProfileName(clusterName, region string) string {
-	return fmt.Sprintf("%s_%d", clusterName, lo.Must(hashstructure.Hash(fmt.Sprintf("%s%s", region, in.Name), hashstructure.FormatV2, nil)))
+	hashInput := fmt.Sprintf("%s%s%s", region, in.Name, in.Spec.Role)
+	return fmt.Sprintf("%s_%d", clusterName, lo.Must(hashstructure.Hash(hashInput, hashstructure.FormatV2, nil)))
 }
 
 func (in *EC2NodeClass) InstanceProfileRole() string {

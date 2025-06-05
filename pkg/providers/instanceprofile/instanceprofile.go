@@ -34,6 +34,7 @@ type Provider interface {
 	Get(context.Context, string) (*iamtypes.InstanceProfile, error)
 	Create(context.Context, string, string, map[string]string) error
 	Delete(context.Context, string) error
+	List(context.Context, map[string]string) ([]string, error)
 }
 
 type DefaultProvider struct {
@@ -130,4 +131,34 @@ func (p *DefaultProvider) Delete(ctx context.Context, instanceProfileName string
 	}
 	p.cache.Delete(instanceProfileName)
 	return nil
+}
+
+func (p *DefaultProvider) List(ctx context.Context, tags map[string]string) ([]string, error) {
+	paginator := iam.NewListInstanceProfilesPaginator(p.iamapi, &iam.ListInstanceProfilesInput{})
+	var names []string
+	for paginator.HasMorePages() {
+		out, err := paginator.NextPage(ctx)
+		if err != nil {
+			return names, err
+		}
+		for _, profile := range out.InstanceProfiles {
+			tagOut, err := p.iamapi.ListInstanceProfileTags(ctx, &iam.ListInstanceProfileTagsInput{InstanceProfileName: profile.InstanceProfileName})
+			if err != nil {
+				return names, err
+			}
+			if matchesAllTags(tagOut.Tags, tags) {
+				names = append(names, lo.FromPtr(profile.InstanceProfileName))
+			}
+		}
+	}
+	return names, nil
+}
+
+func matchesAllTags(tags []iamtypes.Tag, wanted map[string]string) bool {
+	for k, v := range wanted {
+		if !lo.ContainsBy(tags, func(t iamtypes.Tag) bool { return lo.FromPtr(t.Key) == k && lo.FromPtr(t.Value) == v }) {
+			return false
+		}
+	}
+	return true
 }

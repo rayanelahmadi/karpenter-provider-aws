@@ -506,17 +506,14 @@ spec:
                   type: object
                 role:
                   description: |-
-                    Role is the AWS identity that nodes use. This field is immutable.
+                    Role is the AWS identity that nodes use. This field may be updated.
                     This field is mutually exclusive from instanceProfile.
-                    Marking this field as immutable avoids concerns around terminating managed instance profiles from running instances.
-                    This field may be made mutable in the future, assuming the correct garbage collection and drift handling is implemented
-                    for the old instance profiles on an update.
+                    Karpenter creates a new instance profile for each role value to avoid
+                    disrupting running nodes when the role changes.
                   type: string
                   x-kubernetes-validations:
                     - message: role cannot be empty
                       rule: self != ''
-                    - message: immutable field changed
-                      rule: self == oldSelf
                 securityGroupSelectorTerms:
                   description: SecurityGroupSelectorTerms is a list of security group selector terms. The terms are ORed.
                   items:
